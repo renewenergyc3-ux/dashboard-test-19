@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEA Smart Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --pea-purple: #6c2d91;
+            --pea-gold: #ffc107;
+            --pea-bg: #f4f7f6;
+            --text-dark: #2d3436;
+            --gray-light: #e0e0e0;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: var(--pea-bg);
+            margin: 0;
+            color: var(--text-dark);
+        }
+
+        /* Header & Navbar */
+        .header {
+            background: #fff;
+            padding: 10px 5%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 4px solid var(--pea-purple);
+        }
+
+        .brand { display: flex; align-items: center; gap: 15px; }
+        .brand img { height: 50px; }
+        .brand h1 { font-size: 1.2rem; color: var(--pea-purple); margin: 0; }
+
+        /* Filter Section */
+        .filter-section {
+            background: white;
+            padding: 15px 5%;
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--gray-light);
+        }
+
+        .filter-group { display: flex; flex-direction: column; gap: 5px; }
+        .filter-group label { font-weight: 600; font-size: 0.9rem; color: var(--pea-purple); }
+        
+        select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-family: 'Sarabun';
+            min-width: 250px;
+            outline: none;
+        }
+
+        .btn-print {
+            background: var(--pea-purple);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: 0.3s;
+        }
+        .btn-print:hover { background: #5a2578; }
+
+        /* Container */
+        .container { padding: 20px 5%; }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .card-header {
+            border-left: 5px solid var(--pea-gold);
+            padding-left: 15px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            color: var(--pea-purple);
+        }
+
+        /* Chart Area */
+        .chart-container { height: 400px; position: relative; }
+
+        /* Table Area */
+        .table-wrapper { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        th {
+            background: #f8f9fa;
+            color: var(--pea-purple);
+            padding: 12px;
+            text-align: left;
+            border-bottom: 2px solid var(--pea-purple);
+        }
+        td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background: #fdfbff; }
+
+        /* Print CSS */
+        @media print {
+            .header, .filter-section, .btn-print { display: none !important; }
+            .card { box-shadow: none; border: 1px solid #eee; margin: 0; padding: 10px; }
+            body { background: white; }
+        }
+
+        /* Loader */
+        #loader {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: white; display: flex; justify-content: center; align-items: center;
+            z-index: 2000; flex-direction: column;
+        }
+        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid var(--pea-purple); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+<div id="loader">
+    <div class="spinner"></div>
+    <p style="margin-top: 15px; color: var(--pea-purple);">กำลังโหลดข้อมูลจาก Google Sheet...</p>
+</div>
+
+<div class="header">
+    <div class="brand">
+        <img src="LOGO_PEA.jpg" alt="PEA LOGO" onerror="this.src='https://www.pea.co.th/Portals/0/logo_pea.png'">
+        <h1>PEA Dashboard Digital Service</h1>
+    </div>
+    <button class="btn-print" onclick="window.print()">🖨️ พิมพ์เป็น PDF</button>
+</div>
+
+<div class="filter-section">
+    <div class="filter-group">
+        <label>เลือกการไฟฟ้าในพื้นที่ :</label>
+        <select id="parentFilter" onchange="handleParentChange()">
+            <option value="ALL">-- แสดงทั้งหมด --</option>
+        </select>
+    </div>
+    <div class="filter-group" id="subFilterGroup" style="display: none;">
+        <label>เลือกการไฟฟ้าย่อย :</label>
+        <select id="childFilter" onchange="handleChildChange()">
+            <option value="ALL">-- แสดงผลรวมจุดรวมงาน --</option>
+        </select>
+    </div>
+</div>
+
+<div class="container">
+    <div class="card">
+        <div class="card-header" id="chartTitle">สัดส่วนข้อมูลตามสถานะ</div>
+        <div class="chart-container">
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" id="tableTitle">รายละเอียดข้อมูลรายการ</div>
+        <div class="table-wrapper">
+            <table>
+                <thead><tr id="tableHead"></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const SHEET_ID = '15SClvSIvKz9o06xrxUkeenAAXSvjn4SRo9Dyx8GCRY0';
+    const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tq=SELECT%20*`;
+    
+    // Config Columns
+    const COL_INDEX = { A:0, B:1, C:2, H:7, I:8, J:9, M:12, O:14 };
+    const TARGET_COLS = [0, 1, 2, 7, 8, 9, 12, 14];
+    
+    const STATUS_ORDER = [
+        "ยกเลิก", "รอตรวจสอบคำขอ", "รอตรวจสอบคำขอ (เกิน SLA)", "รอผู้ยื่นคำขอส่งเอกสารแก้ไข",
+        "รออนุมัติเชื่อมต่อ/รับพิจารณา", "รอชำระเงิน", "รอดำเนินการหลังอนุมัติเชื่อมต่อ / รับพิจารณา",
+        "รอแก้ไขเอกสารหลังอนุมัติเชื่อมต่อ / รับพิจารณา", "รอตรวจสอบระบบผลิต",
+        "รออนุมัติเชื่อมต่อ (200 kW ขึ้นไป)", "รอทดสอบเชื่อมต่อ", "รออนุมัติแจ้งวันเริ่มเชื่อมต่อ", "เชื่อมต่อเรียบร้อยแล้ว"
+    ];
+
+    const COLORS = ['#e74c3c', '#3498db', '#f1c40f', '#e67e22', '#9b59b6', '#f39c12', '#95a5a6', '#2980b9', '#2ecc71', '#d35400', '#1abc9c', '#8e44ad', '#27ae60'];
+
+    let rawData = [];
+    let headers = [];
+    let chart = null;
+    let selectedStatus = null;
+
+    async function init() {
+        try {
+            const res = await fetch(URL);
+            const text = await res.text();
+            const json = JSON.parse(text.substring(47).slice(0, -2));
+            headers = json.table.cols;
+            rawData = json.table.rows;
+
+            setupParentFilter();
+            renderTableHeader();
+            applyFilter();
+            document.getElementById('loader').style.display = 'none';
+        } catch (e) {
+            console.error("Fetch Error:", e);
+            alert("ไม่สามารถดึงข้อมูลได้");
+        }
+    }
+
+    function setupParentFilter() {
+        const select = document.getElementById('parentFilter');
+        const uniqueO = [...new Set(rawData.map(r => r.c[14]?.v))].filter(v => v);
+        
+        // กรองเฉพาะจุดรวมงาน (ตัวเลขหลัก ไม่มีจุด)
+        const parents = uniqueO.filter(v => !v.split(' ')[0].includes('.')).sort((a,b) => parseFloat(a) - parseFloat(b));
+        
+        parents.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.split(' ')[0]; // เก็บเฉพาะเลข เช่น "1"
+            opt.innerText = p;
+            select.appendChild(opt);
+        });
+    }
+
+    function handleParentChange() {
+        const parentVal = document.getElementById('parentFilter').value;
+        const subGroup = document.getElementById('subFilterGroup');
+        const childSelect = document.getElementById('childFilter');
+        
+        selectedStatus = null; // reset status filter
+        childSelect.innerHTML = '<option value="ALL">-- แสดงผลรวมจุดรวมงาน --</option>';
+
+        if (parentVal === "ALL") {
+            subGroup.style.display = 'none';
+        } else {
+            const children = [...new Set(rawData.map(r => r.c[14]?.v))]
+                .filter(v => v && v.startsWith(parentVal + "."))
+                .sort((a,b) => parseFloat(a) - parseFloat(b));
+
+            if (children.length > 0) {
+                subGroup.style.display = 'flex';
+                children.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.innerText = c;
+                    childSelect.appendChild(opt);
+                });
+            } else {
+                subGroup.style.display = 'none';
+            }
+        }
+        applyFilter();
+    }
+
+    function handleChildChange() {
+        selectedStatus = null;
+        applyFilter();
+    }
+
+    function applyFilter() {
+        const parentId = document.getElementById('parentFilter').value;
+        const childVal = document.getElementById('childFilter').value;
+
+        let filtered = rawData;
+
+        if (parentId !== "ALL") {
+            if (childVal !== "ALL") {
+                // เลือกการไฟฟ้าย่อย
+                filtered = rawData.filter(r => r.c[14]?.v === childVal);
+            } else {
+                // เลือกการไฟฟ้าจุดรวมงาน (ให้แสดงทั้งตัวเองและลูก)
+                filtered = rawData.filter(r => {
+                    const val = r.c[14]?.v || "";
+                    return val.startsWith(parentId + " ") || val.startsWith(parentId + ".");
+                });
+            }
+        }
+
+        updateChart(filtered);
+        
+        // กรองตามการคลิกกราฟ (ถ้ามี)
+        const finalData = selectedStatus 
+            ? filtered.filter(r => r.c[1]?.v.trim() === selectedStatus)
+            : filtered;
+        
+        updateTable(finalData);
+    }
+
+    function updateChart(data) {
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        const counts = {};
+        data.forEach(r => {
+            const s = r.c[1]?.v.trim();
+            if(s) counts[s] = (counts[s] || 0) + 1;
+        });
+
+        const labels = [], values = [], bgColors = [];
+        STATUS_ORDER.forEach((s, i) => {
+            if (counts[s]) {
+                labels.push(s);
+                values.push(counts[s]);
+                if (selectedStatus === null) {
+                    bgColors.push(COLORS[i % COLORS.length]);
+                } else {
+                    bgColors.push(s === selectedStatus ? COLORS[i % COLORS.length] : '#dfe6e9');
+                }
+            }
+        });
+
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: bgColors,
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onHover: (e, el) => e.native.target.style.cursor = el[0] ? 'pointer' : 'default',
+                onClick: (e, el) => {
+                    if (el.length > 0) {
+                        const clicked = labels[el[0].index];
+                        selectedStatus = (selectedStatus === clicked) ? null : clicked;
+                    } else {
+                        selectedStatus = null;
+                    }
+                    applyFilter();
+                },
+                plugins: { legend: { display: false } },
+                scales: { 
+                    y: { beginAtZero: true, grid: { display: false } },
+                    x: { ticks: { font: { size: 10 } } }
+                }
+            }
+        });
+    }
+
+    function renderTableHeader() {
+        const tr = document.getElementById('tableHead');
+        TARGET_COLS.forEach(idx => {
+            const th = document.createElement('th');
+            th.innerText = headers[idx].label;
+            tr.appendChild(th);
+        });
+    }
+
+    function updateTable(data) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = '';
+        document.getElementById('tableTitle').innerText = selectedStatus ? `รายละเอียดข้อมูล: ${selectedStatus}` : "รายละเอียดข้อมูลรายการ";
+
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            TARGET_COLS.forEach(idx => {
+                const td = document.createElement('td');
+                const cell = row.c[idx];
+                td.innerText = cell ? (cell.f || cell.v) : '-';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    init();
+</script>
+</body>
+</html>
